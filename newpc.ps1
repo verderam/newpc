@@ -998,7 +998,7 @@ function Save-DefaultAssociationsXml {
             $writer.WriteAttributeString('Identifier', $association.Identifier)
             $writer.WriteAttributeString('ProgId', $association.ProgId)
             $writer.WriteAttributeString('ApplicationName', $association.ApplicationName)
-            $writer.WriteAttributeString('Suggested', 'true')
+            $writer.WriteAttributeString('Suggested', 'false')
             $writer.WriteEndElement()
         }
         $writer.WriteEndElement()
@@ -1010,15 +1010,42 @@ function Save-DefaultAssociationsXml {
 }
 
 function Set-DefaultApplications {
-    Write-Log 'Lettura delle associazioni registrate da Chrome, PDF-XChange Editor e 7-Zip.'
-    $chrome = @(Get-ChromeAssociations)
-    $pdf = @(New-Association -Identifier '.pdf' -ProgId (Get-PdfXChangeProgId) -ApplicationName 'PDF-XChange Editor')
-    $sevenZip = @(Get-SevenZipAssociations)
-    $xnView = @(Get-XnViewImageAssociations)
-    $vlc = @(Get-VlcVideoAssociations)
+    Write-Log 'Lettura delle associazioni registrate; ogni applicazione viene gestita separatamente.'
+    $chrome = @()
+    $pdf = @()
+    $sevenZip = @()
+    $xnView = @()
+    $vlc = @()
+
+    try { $chrome = @(Get-ChromeAssociations) }
+    catch {
+        $script:Failures += 'Associazioni Chrome'
+        Write-Log "Associazioni Chrome non disponibili: $($_.Exception.Message)" -Level ERROR
+    }
+    try { $pdf = @(New-Association -Identifier '.pdf' -ProgId (Get-PdfXChangeProgId) -ApplicationName 'PDF-XChange Editor') }
+    catch {
+        $script:Failures += 'Associazioni PDF-XChange'
+        Write-Log "Associazioni PDF-XChange non disponibili: $($_.Exception.Message)" -Level ERROR
+    }
+    try { $sevenZip = @(Get-SevenZipAssociations) }
+    catch {
+        $script:Failures += 'Associazioni 7-Zip'
+        Write-Log "Associazioni 7-Zip non disponibili: $($_.Exception.Message)" -Level ERROR
+    }
+    try { $xnView = @(Get-XnViewImageAssociations) }
+    catch {
+        $script:Failures += 'Associazioni XnView'
+        Write-Log "Associazioni XnView non disponibili: $($_.Exception.Message)" -Level ERROR
+    }
+    try { $vlc = @(Get-VlcVideoAssociations) }
+    catch {
+        $script:Failures += 'Associazioni VLC'
+        Write-Log "Associazioni VLC non disponibili: $($_.Exception.Message)" -Level ERROR
+    }
 
     if ($sevenZip.Count -eq 0) {
-        throw 'Nessuna associazione 7-Zip trovata nel registro. Aprire una volta 7-Zip File Manager come amministratore, registrare i formati e rieseguire.'
+        $script:Failures += 'Associazioni 7-Zip'
+        Write-Log 'Nessuna associazione 7-Zip trovata; le altre associazioni verranno comunque applicate.' -Level WARN
     }
 
     # Una sola voce per identificatore; le voci successive sostituiscono le precedenti.
@@ -1027,19 +1054,29 @@ function Set-DefaultApplications {
         $map[$association.Identifier] = $association
     }
     $associations = @($map.Values | Sort-Object Identifier)
+    if ($associations.Count -eq 0) {
+        throw 'Nessuna associazione valida disponibile.'
+    }
     Write-Log ("Associazioni preparate: Chrome {0}, PDF {1}, 7-Zip {2}, XnView {3}, VLC {4}; totale {5}." -f $chrome.Count, $pdf.Count, $sevenZip.Count, $xnView.Count, $vlc.Count, $associations.Count)
 
     $xmlPath = Join-Path $WorkDirectory 'DefaultAppAssociations.xml'
     Save-DefaultAssociationsXml -Associations $associations -Path $xmlPath
 
     # DISM applica queste associazioni ai nuovi profili al primo accesso.
-    Invoke-Native -FilePath "$env:SystemRoot\System32\dism.exe" -Arguments @(
-        '/Online', "/Import-DefaultAppAssociations:$xmlPath"
-    ) -SuccessCodes @(0)
-    Write-Log 'Associazioni predefinite importate per i nuovi utenti.' -Level OK
+    # Un eventuale errore non deve impedire criterio e configurazione dell'utente corrente.
+    try {
+        Invoke-Native -FilePath "$env:SystemRoot\System32\dism.exe" -Arguments @(
+            '/Online', "/Import-DefaultAppAssociations:$xmlPath"
+        ) -SuccessCodes @(0)
+        Write-Log 'Associazioni predefinite importate per i nuovi utenti.' -Level OK
+    }
+    catch {
+        $script:Failures += 'Importazione DISM associazioni'
+        Write-Log "Importazione DISM non riuscita: $($_.Exception.Message)" -Level ERROR
+    }
 
     # Il criterio applica lo stesso XML anche agli altri utenti al successivo accesso.
-    # Suggested=true e Version evitano di imporre nuovamente le scelte a ogni accesso.
+    # Suggested=false applica le scelte aziendali anche agli utenti con associazioni precedenti.
     Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Policies\Microsoft\Windows\System' -Name 'DefaultAssociationsConfiguration' -Value $xmlPath -Kind String
     Write-Log 'Criterio associazioni configurato per tutti gli utenti al successivo accesso.' -Level OK
 
@@ -1060,7 +1097,13 @@ function Set-DefaultApplications {
         # Raggruppa gli identificatori per ridurre le chiamate e ogni possibile prompt.
         foreach ($group in @($associations | Group-Object ProgId)) {
             $identifierList = ($group.Group.Identifier -join ',')
-            Invoke-Native -FilePath $setUserFta -Arguments @('set', $identifierList, $group.Name) -SuccessCodes @(0)
+            try {
+                Invoke-Native -FilePath $setUserFta -Arguments @('set', $identifierList, $group.Name) -SuccessCodes @(0)
+            }
+            catch {
+                $script:Failures += "SetUserFTA $($group.Name)"
+                Write-Log "Associazione $($group.Name) non applicata: $($_.Exception.Message)" -Level ERROR
+            }
         }
     }
     else {
@@ -1070,7 +1113,7 @@ function Set-DefaultApplications {
         [System.IO.File]::WriteAllLines($configPath, $lines, (New-Object System.Text.UTF8Encoding($false)))
         Invoke-Native -FilePath $setUserFta -Arguments @($configPath) -SuccessCodes @(0)
     }
-    Write-Log "Associazioni applicate all'utente corrente con $setUserFta." -Level OK
+    Write-Log "Associazioni elaborate per l'utente corrente con $setUserFta; verificare eventuali errori parziali." -Level OK
 }
 
 function Set-RegistryValue {
@@ -1104,6 +1147,24 @@ function Set-RegistryValue {
     }
 }
 
+function Get-NavyWallpaperPath {
+    $wallpaperPath = Join-Path $WorkDirectory 'navy.bmp'
+    if (Test-Path -LiteralPath $wallpaperPath -PathType Leaf) { return $wallpaperPath }
+
+    Add-Type -AssemblyName System.Drawing
+    $bitmap = New-Object System.Drawing.Bitmap 64, 64
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.Clear([System.Drawing.Color]::FromArgb(0, 32, 64))
+        $bitmap.Save($wallpaperPath, [System.Drawing.Imaging.ImageFormat]::Bmp)
+    }
+    finally {
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+    return $wallpaperPath
+}
+
 function Set-UserRegistryPreferences {
     param([string]$UserRoot)
 
@@ -1115,13 +1176,15 @@ function Set-UserRegistryPreferences {
     Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'TaskbarDa' -Value 0
     Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'TaskbarMn' -Value 0
     Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'ShowTaskViewButton' -Value 1
-    Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'SeparateProcess' -Value 0
+    Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'SeparateProcess' -Value 1
+    Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'TaskbarAl' -Value 0
 
     Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\CurrentVersion\Search' -Name 'SearchboxTaskbarMode' -Value 0
 
-    # Sfondo a tinta unita blu navy scuro RGB 0,32,64.
-    Set-RegistryValue -Root $UserRoot -Path 'Control Panel\Desktop' -Name 'Wallpaper' -Value '' -Kind String
-    Set-RegistryValue -Root $UserRoot -Path 'Control Panel\Desktop' -Name 'WallpaperStyle' -Value '0' -Kind String
+    # Sfondo blu navy scuro RGB 0,32,64 tramite immagine reale, non soltanto colore Registry.
+    $wallpaperPath = Get-NavyWallpaperPath
+    Set-RegistryValue -Root $UserRoot -Path 'Control Panel\Desktop' -Name 'Wallpaper' -Value $wallpaperPath -Kind String
+    Set-RegistryValue -Root $UserRoot -Path 'Control Panel\Desktop' -Name 'WallpaperStyle' -Value '2' -Kind String
     Set-RegistryValue -Root $UserRoot -Path 'Control Panel\Desktop' -Name 'TileWallpaper' -Value '0' -Kind String
     Set-RegistryValue -Root $UserRoot -Path 'Control Panel\Colors' -Name 'Background' -Value '0 32 64' -Kind String
 
@@ -1188,8 +1251,6 @@ function Set-UserRegistryPreferences {
     Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Internet Explorer\TabbedBrowsing' -Name 'WarnOnClose' -Value 0
     Set-RegistryValue -Root $UserRoot -Path 'Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\Bags\AllFolders\Shell' -Name 'FolderType' -Value 'NotSpecified' -Kind String
 
-    # DesktopProcess=1 e SeparateProcess=1 non vengono applicati: contraddirebbero
-    # il requisito delle finestre Explorer in un solo processo.
 }
 
 function Set-DefaultProfilePreferences {
@@ -1328,8 +1389,15 @@ function Remove-StoreApplications {
             Write-Log "AppX rimosso per gli utenti: $($package.Name)" -Level OK
         }
         catch {
-            $script:Failures += "Rimozione AppX $($package.Name)"
-            Write-Log "Impossibile rimuovere $($package.Name): $($_.Exception.Message)" -Level ERROR
+            $allUsersError = $_.Exception.Message
+            try {
+                Remove-AppxPackage -Package $package.PackageFullName -ErrorAction Stop
+                Write-Log "AppX rimosso almeno per l'utente corrente: $($package.Name)" -Level WARN
+            }
+            catch {
+                $script:Failures += "Rimozione AppX $($package.Name)"
+                Write-Log "Impossibile rimuovere $($package.Name): $allUsersError; fallback utente: $($_.Exception.Message)" -Level ERROR
+            }
         }
     }
 
@@ -1377,6 +1445,16 @@ function Set-MachinePolicies {
 
     # Evita nuove app consumer, riduce l'attività in background e disabilita Game DVR/WER.
     Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -Value 1
+
+    # Blocca a livello macchina nuove installazioni consumer per ogni profilo.
+    $machineContentDelivery = 'SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+    foreach ($valueName in @(
+        'ContentDeliveryAllowed', 'OemPreInstalledAppsEnabled', 'PreInstalledAppsEnabled',
+        'SilentInstalledAppsEnabled', 'SoftLandingEnabled', 'SubscribedContentEnabled'
+    )) {
+        Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path $machineContentDelivery -Name $valueName -Value 0
+    }
+
     Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Policies\Microsoft\Windows\AppPrivacy' -Name 'LetAppsRunInBackground' -Value 2
     Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Policies\Microsoft\Windows\GameDVR' -Name 'AllowGameDVR' -Value 0
     Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' -Name 'Disabled' -Value 1
@@ -1692,13 +1770,14 @@ try {
         Invoke-Step 'Configurazione servizio Everything' { Set-EverythingEnterpriseConfiguration }
     }
 
+    # I criteri consumer precedono la rimozione per evitare reinstallazioni immediate.
+    Invoke-Step 'Criteri locali Windows 11' { Set-MachinePolicies }
     Invoke-Step 'Rimozione app Store per utenti esistenti e futuri' { Remove-StoreApplications }
 
     if ($null -ne $script:ChocoExe) {
         Invoke-Step 'Configurazione applicazioni predefinite' { Set-DefaultApplications }
     }
 
-    Invoke-Step 'Criteri locali Windows 11' { Set-MachinePolicies }
     Invoke-Step 'Tweak aggiuntivi di sistema' { Set-AdditionalMachineTweaks }
     Invoke-Step 'Preferenze utente corrente' { Set-UserRegistryPreferences -UserRoot 'Registry::HKEY_CURRENT_USER' }
     Invoke-Step 'Preferenze profilo predefinito' { Set-DefaultProfilePreferences }

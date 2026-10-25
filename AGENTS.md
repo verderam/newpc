@@ -64,21 +64,22 @@ Chocolatey viene installato tramite WinGet se assente. Non trasformare un errore
 - XnView MP/Pro per immagini tramite `NewPC.XnView.Image`.
 - VLC per video, non audio, tramite `NewPC.VLC.Video`.
 - Non scrivere direttamente gli hash `UserChoice`: DISM per nuovi profili, criterio `DefaultAssociationsConfiguration` per tutti e SetUserFTA per l'utente corrente.
-- SetUserFTA 2.x usa chiamate raggruppate per ProgID; 1.x usa un file di configurazione.
+- XML con `Suggested=false` per sostituire anche scelte precedenti al successivo accesso. Le associazioni di Chrome, PDF-XChange, 7-Zip, XnView e VLC vengono raccolte separatamente: un errore di una non deve bloccare le altre.
+- SetUserFTA 2.x usa chiamate raggruppate per ProgID; 1.x usa un file di configurazione. Senza SetUserFTA l'utente corrente richiede disconnessione/riconnessione; non sopprimere il relativo errore.
 
 ### Preferenze e pulizia
 
 - Open-Shell “Classic with two columns”: `MenuStyle=1`, `ShowedStyle2=1`.
 - Primo accesso senza domande iniziali: `EnableFirstLogonAnimation=0`, criterio `DisablePrivacyExperience=1`, suggerimenti/Windows Welcome disattivati e `ScoobeSystemSettingEnabled=0` nei profili corrente/Default. Non usare `SkipMachineOOBE` o `SkipUserOOBE`; lo script agisce sul primo accesso dei profili, non sostituisce un file Unattend per l'OOBE iniziale del sistema. Il cambio password obbligatorio resta invariato.
-- Sfondo blu navy; niente Widget/ricerca; taskbar soltanto Esplora risorse e Visualizzazione attività tramite `TaskbarLayout.xml`.
-- Finestre Explorer in un solo processo.
-- Preserva sempre Calcolatrice, Foto, Store e componenti necessari; rimuove AppX consumer per utenti e provisioning.
+- Sfondo blu navy tramite immagine reale `%ProgramData%\NewPC\navy.bmp`; niente Widget/ricerca; taskbar allineata a sinistra (`TaskbarAl=0`) e soltanto Esplora risorse/Visualizzazione attività tramite `TaskbarLayout.xml`.
+- Finestre delle cartelle in un processo separato: `SeparateProcess=1`. Requisito aggiornato dall'utente, sostituisce il precedente valore 0.
+- Preserva sempre Calcolatrice, Foto, Store e componenti necessari; rimuove AppX consumer per utenti e provisioning. I criteri Content Delivery vanno applicati prima della rimozione e anche a livello macchina per impedire reinstallazioni; se `-AllUsers` fallisce, tentare la rimozione per l'utente corrente.
 - Distribuisce preset ai profili corrente, esistenti e Default; l'hive Default usa `HKU\NewPCDefault` e va sempre scaricato, anche dopo errori/interruzioni.
 - Disabilita servizi consumer/background indicati nello script, Cortana tramite criterio, ibernazione e sospensioni AC; non modificare il timeout del monitor.
 - Windows Update manuale senza notifiche.
 - Tweak aggiuntivi: menu contestuale CMD senza `Extended`; niente riavvio automatico/dump dopo crash; stato avvio dettagliato; notifiche Security Center disattivate; `FilterAdministratorToken=0`; ultimo utente non visualizzato; AutoRun/AutoPlay disattivati; MSIServer in modalità provvisoria; suono di avvio disattivato.
 - Tweak utente: WER senza interfaccia, effetti/animazioni ridotti, menu e timeout di chiusura più rapidi, `AutoEndTasks=1`, `AutoRestartShell=1`, tipo cartella generico `NotSpecified` e vecchie preferenze IE richieste.
-- Non applicare `DesktopProcess=1` o `SeparateProcess=1`: contraddicono le finestre Explorer in un solo processo (`SeparateProcess=0`).
+- Non applicare `DesktopProcess=1`: non è necessario per le finestre delle cartelle in processo separato.
 - Al termine: `winget export --include-versions` in `winget.json` nella directory corrente, pulizia del contenuto di `%TEMP%`, quindi arresto di `DoSvc`, pulizia della cache Delivery Optimization e riavvio di `DoSvc` in `finally`. File bloccati = avviso, non fallimento; il servizio deve essere riavviato anche in caso di errore.
 - WinUtil è volutamente l'**ultima operazione** e può sovrascrivere le personalizzazioni precedenti.
 
