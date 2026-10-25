@@ -79,7 +79,7 @@ Chocolatey viene installato tramite WinGet se assente. Non trasformare un errore
 - Tweak aggiuntivi: menu contestuale CMD senza `Extended`; niente riavvio automatico/dump dopo crash; stato avvio dettagliato; notifiche Security Center disattivate; `FilterAdministratorToken=0`; ultimo utente non visualizzato; AutoRun/AutoPlay disattivati; MSIServer in modalità provvisoria; suono di avvio disattivato.
 - Tweak utente: WER senza interfaccia, effetti/animazioni ridotti, menu e timeout di chiusura più rapidi, `AutoEndTasks=1`, `AutoRestartShell=1`, tipo cartella generico `NotSpecified` e vecchie preferenze IE richieste.
 - Non applicare `DesktopProcess=1` o `SeparateProcess=1`: contraddicono le finestre Explorer in un solo processo (`SeparateProcess=0`).
-- Al termine: `winget export --include-versions` in `winget.json` nella directory corrente, poi pulizia del contenuto di `%TEMP%`. File temporanei bloccati = avviso, non fallimento.
+- Al termine: `winget export --include-versions` in `winget.json` nella directory corrente, pulizia del contenuto di `%TEMP%`, quindi arresto di `DoSvc`, pulizia della cache Delivery Optimization e riavvio di `DoSvc` in `finally`. File bloccati = avviso, non fallimento; il servizio deve essere riavviato anche in caso di errore.
 - WinUtil è volutamente l'**ultima operazione** e può sovrascrivere le personalizzazioni precedenti.
 
 ### Amministrazione remota e funzionalità

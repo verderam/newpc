@@ -23,7 +23,7 @@
     - Sopprime animazione, privacy, benvenuto e richieste OOBE al primo accesso utente.
     - Offre al termine Chris Titus WinUtil e attende fino a 20 minuti; default: non eseguire.
     - Esporta i pacchetti installati in winget.json nella cartella corrente.
-    - Svuota la cartella %TEMP%, ignorando gli elementi ancora bloccati.
+    - Svuota %TEMP% e la cache Delivery Optimization, ignorando gli elementi bloccati.
 
 .NOTES
     Eseguire da Windows PowerShell 5.1 con privilegi di amministratore,
@@ -1610,6 +1610,44 @@ function Clear-Temp {
     Write-Log "Pulizia %TEMP% completata: $removed elementi rimossi, $skipped bloccati o non rimovibili." -Level OK
 }
 
+function Clear-DeliveryOptimizationCache {
+    $service = Get-Service -Name 'DoSvc' -ErrorAction SilentlyContinue
+    if ($null -ne $service) {
+        Stop-ServiceIfNeeded -Name 'DoSvc'
+    }
+    else {
+        Write-Log 'Servizio DoSvc non presente; pulizia cache comunque eseguita.' -Level WARN
+    }
+
+    try {
+        $cachePath = Join-Path $env:SystemRoot 'ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache'
+        if (-not (Test-Path -LiteralPath $cachePath -PathType Container)) {
+            Write-Log "Cache Delivery Optimization non presente: $cachePath"
+            return
+        }
+
+        $removed = 0
+        $skipped = 0
+        $items = @(Get-ChildItem -LiteralPath $cachePath -Force -ErrorAction Stop)
+        foreach ($item in $items) {
+            try {
+                Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
+                $removed++
+            }
+            catch {
+                $skipped++
+                Write-Log "Elemento cache non rimosso: $($item.FullName). $($_.Exception.Message)" -Level WARN
+            }
+        }
+        Write-Log "Cache Delivery Optimization pulita: $removed elementi rimossi, $skipped non rimovibili." -Level OK
+    }
+    finally {
+        if ($null -ne $service) {
+            Start-ServiceIfNeeded -Name 'DoSvc'
+        }
+    }
+}
+
 if (-not (Test-IsAdministrator)) {
     throw 'Eseguire lo script da Windows PowerShell come amministratore, nel profilo utente da configurare.'
 }
@@ -1672,6 +1710,7 @@ try {
     Invoke-Step 'Aggiornamento shell Windows' { Restart-WindowsShell }
     Invoke-Step 'Esportazione pacchetti installati con WinGet' { Export-WingetSoftware }
     Invoke-Step 'Pulizia cartella %TEMP%' { Clear-Temp }
+    Invoke-Step 'Pulizia cache Delivery Optimization' { Clear-DeliveryOptimizationCache }
 
     # WinUtil è l'ultima operazione e può sovrascrivere le personalizzazioni precedenti.
     # Dopo l'avvio lo script attende l'utente per un massimo di 20 minuti.
