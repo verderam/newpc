@@ -19,6 +19,7 @@
     - Configura Open-Shell, desktop, taskbar, servizi, Windows Update e risparmio energia.
     - Applica tweak di sistema e utente per AutoPlay, notifiche, reattività ed effetti grafici.
     - Applica le preferenze all'utente corrente e al profilo predefinito per i nuovi utenti.
+    - Sopprime animazione, privacy, benvenuto e richieste OOBE al primo accesso utente.
     - Offre al termine Chris Titus WinUtil e attende fino a 20 minuti; default: non eseguire.
     - Esporta i pacchetti installati in winget.json nella cartella corrente.
     - Svuota la cartella %TEMP%, ignorando gli elementi ancora bloccati.
@@ -1129,11 +1130,24 @@ function Set-UserRegistryPreferences {
         'ContentDeliveryAllowed', 'OemPreInstalledAppsEnabled', 'PreInstalledAppsEnabled',
         'PreInstalledAppsEverEnabled', 'SilentInstalledAppsEnabled', 'SoftLandingEnabled',
         'SystemPaneSuggestionsEnabled', 'SubscribedContentEnabled',
-        'SubscribedContent-338387Enabled', 'SubscribedContent-338388Enabled',
-        'SubscribedContent-338389Enabled', 'SubscribedContent-353698Enabled'
+        'SubscribedContent-310093Enabled', 'SubscribedContent-338387Enabled',
+        'SubscribedContent-338388Enabled', 'SubscribedContent-338389Enabled',
+        'SubscribedContent-338393Enabled', 'SubscribedContent-353694Enabled',
+        'SubscribedContent-353696Enabled', 'SubscribedContent-353698Enabled'
     )) {
         Set-RegistryValue -Root $UserRoot -Path $contentDelivery -Name $valueName -Value 0
     }
+
+    # Sopprime benvenuto Windows, suggerimenti e richiesta "Completa configurazione dispositivo".
+    $cloudPolicy = 'Software\Policies\Microsoft\Windows\CloudContent'
+    foreach ($valueName in @(
+        'DisableWindowsSpotlightWindowsWelcomeExperience',
+        'DisableWindowsSpotlightOnActionCenter', 'DisableWindowsSpotlightOnSettings',
+        'DisableTailoredExperiencesWithDiagnosticData', 'DisableThirdPartySuggestions'
+    )) {
+        Set-RegistryValue -Root $UserRoot -Path $cloudPolicy -Name $valueName -Value 1
+    }
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement' -Name 'ScoobeSystemSettingEnabled' -Value 0
 
     # Disattiva acquisizione Game Bar/DVR anche per i profili nei quali restano componenti di sistema.
     Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\CurrentVersion\GameDVR' -Name 'AppCaptureEnabled' -Value 0
@@ -1346,6 +1360,12 @@ function Set-MachinePolicies {
 
     # Cortana non è un servizio autonomo: viene disabilitato tramite il relativo criterio.
     Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Policies\Microsoft\Windows\Windows Search' -Name 'AllowCortana' -Value 0
+
+    # Primo accesso: niente animazione iniziale, pagine privacy o suggerimenti OOBE.
+    Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'EnableFirstLogonAnimation' -Value 0
+    Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Policies\Microsoft\Windows\OOBE' -Name 'DisablePrivacyExperience' -Value 1
+    Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableSoftLanding' -Value 1
+    Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path 'SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1
 
     # Windows Update: solo controllo/installazione manuale; interfaccia manuale ancora disponibile.
     $windowsUpdatePolicy = 'SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'

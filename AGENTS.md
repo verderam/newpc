@@ -68,6 +68,7 @@ Chocolatey viene installato tramite WinGet se assente. Non trasformare un errore
 ### Preferenze e pulizia
 
 - Open-Shell “Classic with two columns”: `MenuStyle=1`, `ShowedStyle2=1`.
+- Primo accesso senza domande iniziali: `EnableFirstLogonAnimation=0`, criterio `DisablePrivacyExperience=1`, suggerimenti/Windows Welcome disattivati e `ScoobeSystemSettingEnabled=0` nei profili corrente/Default. Non usare `SkipMachineOOBE` o `SkipUserOOBE`; lo script agisce sul primo accesso dei profili, non sostituisce un file Unattend per l'OOBE iniziale del sistema. Il cambio password obbligatorio resta invariato.
 - Sfondo blu navy; niente Widget/ricerca; taskbar soltanto Esplora risorse e Visualizzazione attività tramite `TaskbarLayout.xml`.
 - Finestre Explorer in un solo processo.
 - Preserva sempre Calcolatrice, Foto, Store e componenti necessari; rimuove AppX consumer per utenti e provisioning.
