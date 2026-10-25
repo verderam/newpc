@@ -74,6 +74,9 @@ Chocolatey viene installato tramite WinGet se assente. Non trasformare un errore
 - Distribuisce preset ai profili corrente, esistenti e Default; l'hive Default usa `HKU\NewPCDefault` e va sempre scaricato, anche dopo errori/interruzioni.
 - Disabilita servizi consumer/background indicati nello script, Cortana tramite criterio, ibernazione e sospensioni AC; non modificare il timeout del monitor.
 - Windows Update manuale senza notifiche.
+- Tweak aggiuntivi: menu contestuale CMD senza `Extended`; niente riavvio automatico/dump dopo crash; stato avvio dettagliato; notifiche Security Center disattivate; `FilterAdministratorToken=0`; ultimo utente non visualizzato; AutoRun/AutoPlay disattivati; MSIServer in modalità provvisoria; suono di avvio disattivato.
+- Tweak utente: WER senza interfaccia, effetti/animazioni ridotti, menu e timeout di chiusura più rapidi, `AutoEndTasks=1`, `AutoRestartShell=1`, tipo cartella generico `NotSpecified` e vecchie preferenze IE richieste.
+- Non applicare `DesktopProcess=1` o `SeparateProcess=1`: contraddicono le finestre Explorer in un solo processo (`SeparateProcess=0`).
 - Al termine: `winget export --include-versions` in `winget.json` nella directory corrente, poi pulizia del contenuto di `%TEMP%`. File temporanei bloccati = avviso, non fallimento.
 - WinUtil è volutamente l'**ultima operazione** e può sovrascrivere le personalizzazioni precedenti.
 
@@ -116,6 +119,7 @@ settings\user-presets\
 - Per i servizi gestire anche `StartPending` e `StopPending`; non riavviare ripetutamente servizi senza necessità.
 - Le funzionalità Windows già `Enabled`/`EnablePending` e RSAT `Installed`/`InstallPending` non vanno reinstallate.
 - Gli avvisi di `winget export` su pacchetti non presenti nelle origini non sono necessariamente errori.
+- Il batch di tweak fornito dall'utente contiene voci duplicate, percorsi errati (`SOFTWARE\SOFTWARE`, `HKLMHKEY_LOCAL_MACHINE`), impostazioni IDE/cache hardware-specifiche e vecchie chiavi Windows Update: non importarlo ciecamente. Sono stati integrati soltanto i tweak compatibili, correggendo percorsi e tipi; `AutoReboot` è impostato a 0 invece di essere eliminato.
 
 ## Stato della verifica
 

@@ -17,6 +17,7 @@
     - Configura condivisioni amministrative, WinRM e LiteManager Server per amministratori.
     - Applica preimpostazioni uniformi alle applicazioni e ai profili utente.
     - Configura Open-Shell, desktop, taskbar, servizi, Windows Update e risparmio energia.
+    - Applica tweak di sistema e utente per AutoPlay, notifiche, reattività ed effetti grafici.
     - Applica le preferenze all'utente corrente e al profilo predefinito per i nuovi utenti.
     - Offre al termine Chris Titus WinUtil e attende fino a 20 minuti; default: non eseguire.
     - Esporta i pacchetti installati in winget.json nella cartella corrente.
@@ -1138,6 +1139,42 @@ function Set-UserRegistryPreferences {
     Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\CurrentVersion\GameDVR' -Name 'AppCaptureEnabled' -Value 0
     Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\CurrentVersion\GameDVR' -Name 'HistoricalCaptureEnabled' -Value 0
     Set-RegistryValue -Root $UserRoot -Path 'System\GameConfigStore' -Name 'GameDVR_Enabled' -Value 0
+
+    # Tweak aggiuntivi: notifiche, AutoPlay, reattività e effetti grafici ridotti.
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\Windows Error Reporting' -Name 'DontShowUI' -Value 1
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\Windows Error Reporting' -Name 'Disabled' -Value 1
+
+    $explorerPolicies = 'Software\Microsoft\Windows\CurrentVersion\Policies\Explorer'
+    Set-RegistryValue -Root $UserRoot -Path $explorerPolicies -Name 'HideSCAHealth' -Value 1
+    Set-RegistryValue -Root $UserRoot -Path $explorerPolicies -Name 'NoInternetOpenWith' -Value 1
+    Set-RegistryValue -Root $UserRoot -Path $explorerPolicies -Name 'NoDriveTypeAutoRun' -Value 255
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers' -Name 'DisableAutoplay' -Value 1
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\CurrentVersion\Explorer' -Name 'link' -Value ([byte[]](0,0,0,0)) -Kind Binary
+
+    Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'Start_ShowRun' -Value 1
+    Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'ListviewShadow' -Value 0
+    Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'IconsOnly' -Value 1
+    Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'WebView' -Value 0
+    Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'TaskbarAnimations' -Value 0
+    Set-RegistryValue -Root $UserRoot -Path $explorerAdvanced -Name 'ListviewAlphaSelect' -Value 0
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows\DWM' -Name 'ColorizationOpaqueBlend' -Value 1
+
+    $desktop = 'Control Panel\Desktop'
+    Set-RegistryValue -Root $UserRoot -Path $desktop -Name 'MenuShowDelay' -Value '1' -Kind String
+    Set-RegistryValue -Root $UserRoot -Path $desktop -Name 'DragFullWindows' -Value '0' -Kind String
+    Set-RegistryValue -Root $UserRoot -Path $desktop -Name 'AutoEndTasks' -Value 1
+    Set-RegistryValue -Root $UserRoot -Path $desktop -Name 'HungAppTimeout' -Value '2000' -Kind String
+    Set-RegistryValue -Root $UserRoot -Path $desktop -Name 'WaitToKillAppTimeout' -Value '4000' -Kind String
+    Set-RegistryValue -Root $UserRoot -Path $desktop -Name 'WaitToKillServiceTimeout' -Value '4000' -Kind String
+    Set-RegistryValue -Root $UserRoot -Path "$desktop\WindowMetrics" -Name 'MinAnimate' -Value '0' -Kind String
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoRestartShell' -Value 1
+
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Internet Explorer\TabbedBrowsing' -Name 'PopupsUseNewWindow' -Value 2
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Microsoft\Internet Explorer\TabbedBrowsing' -Name 'WarnOnClose' -Value 0
+    Set-RegistryValue -Root $UserRoot -Path 'Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\Bags\AllFolders\Shell' -Name 'FolderType' -Value 'NotSpecified' -Kind String
+
+    # DesktopProcess=1 e SeparateProcess=1 non vengono applicati: contraddirebbero
+    # il requisito delle finestre Explorer in un solo processo.
 }
 
 function Set-DefaultProfilePreferences {
@@ -1333,6 +1370,46 @@ function Set-MachinePolicies {
     Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path $chromePolicy -Name 'WelcomePageOnOSUpgradeEnabled' -Value 0
     Set-RegistryValue -Root 'Registry::HKEY_LOCAL_MACHINE' -Path $chromePolicy -Name 'MetricsReportingEnabled' -Value 0
     Write-Log 'Criteri Windows e preimpostazioni Chrome Enterprise configurati.' -Level OK
+}
+
+function Set-AdditionalMachineTweaks {
+    $root = 'Registry::HKEY_LOCAL_MACHINE'
+
+    # Mostra "Apri prompt dei comandi" senza richiedere MAIUSC nel menu contestuale.
+    foreach ($path in @(
+        'Registry::HKEY_CLASSES_ROOT\Directory\Background\shell\cmd',
+        'Registry::HKEY_CLASSES_ROOT\Directory\shell\cmd'
+    )) {
+        $key = Get-Item -LiteralPath $path -ErrorAction SilentlyContinue
+        if ($null -ne $key -and $null -ne $key.GetValue('Extended', $null)) {
+            Remove-ItemProperty -LiteralPath $path -Name 'Extended' -ErrorAction Stop
+        }
+    }
+
+    # Niente riavvio automatico o dump dopo un arresto anomalo; messaggi di stato dettagliati.
+    Set-RegistryValue -Root $root -Path 'SYSTEM\CurrentControlSet\Control\CrashControl' -Name 'AutoReboot' -Value 0
+    Set-RegistryValue -Root $root -Path 'SYSTEM\CurrentControlSet\Control\CrashControl' -Name 'CrashDumpEnabled' -Value 0
+    Set-RegistryValue -Root $root -Path 'SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'VerboseStatus' -Value 1
+
+    foreach ($valueName in @(
+        'AntiVirusDisableNotify', 'AntiSpyWareDisableNotify', 'FirewallDisableNotify',
+        'AutoUpdateDisableNotify', 'UacDisableNotify'
+    )) {
+        Set-RegistryValue -Root $root -Path 'SOFTWARE\Microsoft\Security Center' -Name $valueName -Value 1
+    }
+
+    Set-RegistryValue -Root $root -Path 'SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'NoInternetOpenWith' -Value 1
+    Set-RegistryValue -Root $root -Path 'SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'FilterAdministratorToken' -Value 0
+    Set-RegistryValue -Root $root -Path 'SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'DontDisplayLastUserName' -Value 1
+    Set-RegistryValue -Root $root -Path 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'ReportBootOk' -Value '0' -Kind String
+    Set-RegistryValue -Root $root -Path 'SYSTEM\CurrentControlSet\Services\cdrom' -Name 'AutoRun' -Value 0
+
+    # Consente a Windows Installer di operare anche in modalità provvisoria.
+    Set-RegistryValue -Root $root -Path 'SYSTEM\CurrentControlSet\Control\SafeBoot\Minimal\MSIServer' -Name '' -Value 'Service' -Kind String
+    Set-RegistryValue -Root $root -Path 'SYSTEM\CurrentControlSet\Control\SafeBoot\Network\MSIServer' -Name '' -Value 'Service' -Kind String
+    Set-RegistryValue -Root $root -Path 'SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI\BootAnimation' -Name 'DisableStartupSound' -Value 1
+
+    Write-Log 'Tweak aggiuntivi di sistema applicati.' -Level OK
 }
 
 function Set-TaskbarLayout {
@@ -1560,6 +1637,7 @@ try {
     }
 
     Invoke-Step 'Criteri locali Windows 11' { Set-MachinePolicies }
+    Invoke-Step 'Tweak aggiuntivi di sistema' { Set-AdditionalMachineTweaks }
     Invoke-Step 'Preferenze utente corrente' { Set-UserRegistryPreferences -UserRoot 'Registry::HKEY_CURRENT_USER' }
     Invoke-Step 'Preferenze profilo predefinito' { Set-DefaultProfilePreferences }
     Invoke-Step 'Distribuzione preset uniformi applicazioni' { Copy-UniformUserPresets }
