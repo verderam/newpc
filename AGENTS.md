@@ -39,6 +39,7 @@ Questo file è la fonte di continuità per chi riprende il progetto in una nuova
 - Abilita RDP e aggiunge Everyone al gruppo Desktop remoto tramite SID `S-1-1-0` e `S-1-5-32-555`.
 - Rinomina il PC `W-XXXXXX` con gli ultimi sei caratteri esadecimali del MAC della prima scheda fisica ordinata per `ifIndex`; rispetta un nome già attivo o pendente.
 - Crea `adm` amministratore e `usr` standard soltanto se assenti. Password mascherata con timeout di 10 secondi: password immessa = senza scadenza; timeout/Invio vuoto = account senza password e cambio obbligatorio al primo accesso. Non usare WMIC.
+- Dopo la verifica degli account esegue `net accounts /lockoutthreshold:9`, impostando la soglia di blocco locale a 9 tentativi.
 - UAC resta attivo (`EnableLUA=1`), ma senza prompt per gli amministratori (`ConsentPromptBehaviorAdmin=0`, `PromptOnSecureDesktop=0`).
 - Copia `bin` in `C:\bin`, `apps` in `C:\apps` e `settings\softwarepolicy.ini` in `C:\Windows\softwarepolicy`; Robocopy 0–7 è successo.
 - Aggiunge `C:\bin` alla PATH senza duplicazioni, normalizzando gli slash finali e preservando il tipo Registry.

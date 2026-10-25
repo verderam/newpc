@@ -10,6 +10,7 @@
     - Configura subito l'utente corrente tramite SetUserFTA.exe, se presente in bin o C:\bin.
     - Rinomina il computer W-XXXXXX usando gli ultimi 6 caratteri del primo MAC fisico.
     - Copia bin, apps e settings\softwarepolicy.ini, aggiorna la PATH e crea gli account adm/usr.
+    - Imposta a 9 tentativi la soglia di blocco degli account locali.
     - Disabilita la richiesta di consenso UAC per gli amministratori, lasciando UAC attivo.
     - Rimuove le app Store consumer per tutti gli utenti e dal provisioning dei nuovi utenti.
     - Disabilita servizi non essenziali con attività in background su disco e memoria.
@@ -1631,6 +1632,9 @@ try {
     Invoke-Step 'Copia configurazione Software Policy' { Copy-SoftwarePolicyFile }
     Invoke-Step 'Creazione account adm' { Ensure-LocalAccount -Name 'adm' -Administrator }
     Invoke-Step 'Creazione account usr' { Ensure-LocalAccount -Name 'usr' }
+    Invoke-Step 'Soglia blocco account locali' {
+        Invoke-Native -FilePath "$env:SystemRoot\System32\net.exe" -Arguments @('accounts', '/lockoutthreshold:9') -SuccessCodes @(0)
+    }
     Invoke-Step 'Configurazione UAC amministratori' { Set-AdministratorUacBehavior }
     Invoke-Step 'Inizializzazione WinGet e Chocolatey' { Initialize-PackageManagers }
 
