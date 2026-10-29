@@ -52,6 +52,7 @@ Installazione con WinGet e fallback Chocolatey, saltando pacchetti già rilevati
 - PDF-XChange Editor, 7-Zip, LibreOffice, Open-Shell, PDF24;
 - Google Chrome Enterprise, Google Drive, Revo Uninstaller, XnView MP;
 - Everything, Simple Software Restriction Policy;
+- WordCraft, DeckCraft, GridCraft, PdfCraft, PhotoCraft e ArtCraft tramite gli omonimi ID Chocolatey in minuscolo;
 - LiteManager Server tramite Chocolatey `litemanager-server`.
 
 Chocolatey viene installato tramite WinGet se assente. Non trasformare un errore di autenticazione/rete/package manager in un falso “già installato”.

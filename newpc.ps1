@@ -868,7 +868,13 @@ function Install-RequestedApplications {
         @{ Name = 'Revo Uninstaller';               Winget = 'RevoUninstaller.RevoUninstaller';    Choco = 'revo-uninstaller' },
         @{ Name = 'XnView MP';                      Winget = 'XnSoft.XnViewMP';                    Choco = 'xnviewmp' },
         @{ Name = 'Everything';                     Winget = 'voidtools.Everything';                Choco = 'everything' },
-        @{ Name = 'Simple Software Restriction Policy'; Winget = $null;                            Choco = 'simple-software-restriction-policy' }
+        @{ Name = 'Simple Software Restriction Policy'; Winget = $null;                            Choco = 'simple-software-restriction-policy' },
+        @{ Name = 'WordCraft';                      Winget = $null;                                  Choco = 'wordcraft' },
+        @{ Name = 'DeckCraft';                      Winget = $null;                                  Choco = 'deckcraft' },
+        @{ Name = 'GridCraft';                      Winget = $null;                                  Choco = 'gridcraft' },
+        @{ Name = 'PdfCraft';                       Winget = $null;                                  Choco = 'pdfcraft' },
+        @{ Name = 'PhotoCraft';                     Winget = $null;                                  Choco = 'photocraft' },
+        @{ Name = 'ArtCraft';                       Winget = $null;                                  Choco = 'artcraft' }
     )
 
     foreach ($application in $applications) {
