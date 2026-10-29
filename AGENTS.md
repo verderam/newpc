@@ -56,6 +56,8 @@ Installazione con WinGet e fallback Chocolatey, saltando pacchetti già rilevati
 
 Chocolatey viene installato tramite WinGet se assente. Non trasformare un errore di autenticazione/rete/package manager in un falso “già installato”.
 
+Prima delle installazioni le cache/download vengono reindirizzate in `%ProgramData%\NewPC\cache\winget` e `%ProgramData%\NewPC\cache\choco`. WinGet usa `downloadBehavior.defaultDownloadDirectory` nel proprio `settings.json`; Chocolatey usa `choco config set cacheLocation`. Dopo LiteManager vengono ripristinati i default rimuovendo la proprietà WinGet e con `choco config unset cacheLocation`; il blocco `finally` finale ripete il ripristino se necessario. Non cancellare le altre impostazioni WinGet e non lasciare il reindirizzamento attivo.
+
 ### Associazioni
 
 - Chrome per protocolli/formati registrati, tranne PDF.

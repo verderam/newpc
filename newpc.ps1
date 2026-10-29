@@ -6,6 +6,7 @@
 .DESCRIPTION
     - Abilita Desktop remoto e aggiunge Everyone al gruppo Utenti desktop remoto.
     - Installa Chocolatey con WinGet e le applicazioni richieste con WinGet/Chocolatey.
+    - Usa %ProgramData%\NewPC\cache durante le installazioni e poi ripristina le cache predefinite.
     - Configura le associazioni predefinite per nuovi utenti tramite DISM e per tutti tramite criterio.
     - Configura subito l'utente corrente tramite SetUserFTA.exe, se presente in bin o C:\bin.
     - Rinomina il computer W-XXXXXX usando gli ultimi 6 caratteri del primo MAC fisico.
@@ -75,6 +76,9 @@ $LogPath = Join-Path $LogDirectory ('Setup-{0:yyyyMMdd-HHmmss}.log' -f (Get-Date
 $script:Failures = @()
 $script:WingetExe = $null
 $script:ChocoExe = $null
+$script:WingetCacheConfigured = $false
+$script:ChocoCacheConfigured = $false
+$CacheDirectory = Join-Path $WorkDirectory 'cache'
 
 function Write-Log {
     param(
@@ -579,6 +583,94 @@ function Initialize-PackageManagers {
     }
     Write-Log "WinGet: $script:WingetExe"
     Write-Log "Chocolatey: $script:ChocoExe"
+}
+
+function Get-WingetSettingsPath {
+    return (Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\settings.json')
+}
+
+function Read-WingetSettings {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return [pscustomobject]@{}
+    }
+    $content = [System.IO.File]::ReadAllText($Path)
+    if ([string]::IsNullOrWhiteSpace($content)) { return [pscustomobject]@{} }
+    return ($content | ConvertFrom-Json)
+}
+
+function Save-WingetSettings {
+    param(
+        [string]$Path,
+        [object]$Settings
+    )
+
+    $directory = Split-Path -Path $Path -Parent
+    $null = New-Item -Path $directory -ItemType Directory -Force
+    $json = $Settings | ConvertTo-Json -Depth 100
+    [System.IO.File]::WriteAllText($Path, $json, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+function Set-WingetCacheLocation {
+    $cachePath = Join-Path $CacheDirectory 'winget'
+    $null = New-Item -Path $cachePath -ItemType Directory -Force
+    $settingsPath = Get-WingetSettingsPath
+    $settings = Read-WingetSettings -Path $settingsPath
+
+    if (-not $settings.PSObject.Properties['downloadBehavior'] -or $null -eq $settings.downloadBehavior) {
+        $settings | Add-Member -MemberType NoteProperty -Name 'downloadBehavior' -Value ([pscustomobject]@{}) -Force
+    }
+    $settings.downloadBehavior | Add-Member -MemberType NoteProperty -Name 'defaultDownloadDirectory' -Value $cachePath -Force
+    Save-WingetSettings -Path $settingsPath -Settings $settings
+    $script:WingetCacheConfigured = $true
+    Write-Log "Cache download WinGet impostata su $cachePath."
+}
+
+function Set-ChocolateyCacheLocation {
+    if ($null -eq $script:ChocoExe) { throw 'Chocolatey non disponibile.' }
+    $cachePath = Join-Path $CacheDirectory 'choco'
+    $null = New-Item -Path $cachePath -ItemType Directory -Force
+    Invoke-Native -FilePath $script:ChocoExe -Arguments @(
+        'config', 'set', '--name', 'cacheLocation', '--value', $cachePath
+    ) -SuccessCodes @(0, 2)
+    $script:ChocoCacheConfigured = $true
+    Write-Log "Cache Chocolatey impostata su $cachePath."
+}
+
+function Reset-PackageCacheLocations {
+    $resetErrors = @()
+
+    if ($script:WingetCacheConfigured) {
+        try {
+            $settingsPath = Get-WingetSettingsPath
+            $settings = Read-WingetSettings -Path $settingsPath
+            if ($settings.PSObject.Properties['downloadBehavior'] -and $null -ne $settings.downloadBehavior -and
+                $settings.downloadBehavior.PSObject.Properties['defaultDownloadDirectory']) {
+                $settings.downloadBehavior.PSObject.Properties.Remove('defaultDownloadDirectory')
+                Save-WingetSettings -Path $settingsPath -Settings $settings
+            }
+            $script:WingetCacheConfigured = $false
+            Write-Log 'Directory download WinGet ripristinata al valore predefinito.'
+        }
+        catch { $resetErrors += "WinGet: $($_.Exception.Message)" }
+    }
+
+    if ($script:ChocoCacheConfigured) {
+        try {
+            if ($null -eq $script:ChocoExe) { throw 'choco.exe non disponibile.' }
+            Invoke-Native -FilePath $script:ChocoExe -Arguments @(
+                'config', 'unset', '--name', 'cacheLocation'
+            ) -SuccessCodes @(0, 2)
+            $script:ChocoCacheConfigured = $false
+            Write-Log 'Cache Chocolatey ripristinata al valore predefinito (%TEMP%).'
+        }
+        catch { $resetErrors += "Chocolatey: $($_.Exception.Message)" }
+    }
+
+    if ($resetErrors.Count -gt 0) {
+        throw ('Ripristino cache non completato: ' + ($resetErrors -join '; '))
+    }
 }
 
 function Test-WingetApplicationInstalled {
@@ -1752,9 +1844,11 @@ try {
         Invoke-Native -FilePath "$env:SystemRoot\System32\net.exe" -Arguments @('accounts', '/lockoutthreshold:9') -SuccessCodes @(0)
     }
     Invoke-Step 'Configurazione UAC amministratori' { Set-AdministratorUacBehavior }
+    Invoke-Step 'Configurazione cache temporanea WinGet' { Set-WingetCacheLocation }
     Invoke-Step 'Inizializzazione WinGet e Chocolatey' { Initialize-PackageManagers }
 
     if ($null -ne $script:ChocoExe) {
+        Invoke-Step 'Configurazione cache temporanea Chocolatey' { Set-ChocolateyCacheLocation }
         Invoke-Step 'Installazione applicazioni' { Install-RequestedApplications }
     }
     else {
@@ -1769,6 +1863,7 @@ try {
         Invoke-Step 'Installazione e configurazione LiteManager Server' { Install-LiteManagerServer }
         Invoke-Step 'Configurazione servizio Everything' { Set-EverythingEnterpriseConfiguration }
     }
+    Invoke-Step 'Ripristino cache predefinite WinGet e Chocolatey' { Reset-PackageCacheLocations }
 
     # I criteri consumer precedono la rimozione per evitare reinstallazioni immediate.
     Invoke-Step 'Criteri locali Windows 11' { Set-MachinePolicies }
@@ -1814,5 +1909,9 @@ try {
     }
 }
 finally {
+    if ($script:WingetCacheConfigured -or $script:ChocoCacheConfigured) {
+        try { Reset-PackageCacheLocations }
+        catch { Write-Log "Ripristino cache nella fase finale non riuscito: $($_.Exception.Message)" -Level ERROR }
+    }
     try { Stop-Transcript | Out-Null } catch { }
 }
