@@ -787,6 +787,51 @@ function Install-LiteManagerServer {
     Write-Log 'LiteManager Server configurato dal file aziendale e avviato.' -Level OK
 }
 
+function Set-EverythingUserPreset {
+    param([Parameter(Mandatory = $true)][string]$ProfilePath)
+
+    $directory = Join-Path $ProfilePath 'AppData\Roaming\Everything'
+    $path = Join-Path $directory 'Everything.ini'
+    $null = New-Item -Path $directory -ItemType Directory -Force
+    $lines = New-Object 'System.Collections.Generic.List[string]'
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        $lines.AddRange([string[]][System.IO.File]::ReadAllLines($path))
+    }
+
+    # Modifica soltanto la voce documentata, preservando tutte le altre opzioni.
+    $section = -1
+    $setting = -1
+    $sectionEnd = $lines.Count
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        $line = $lines[$index].Trim()
+        if ($line -ieq '[Everything]') {
+            $section = $index
+            continue
+        }
+        if ($section -ge 0 -and $line -match '^\[') {
+            $sectionEnd = $index
+            break
+        }
+        if ($section -ge 0 -and $line -match '^check_for_updates_on_startup\s*=') {
+            $setting = $index
+            break
+        }
+    }
+
+    if ($setting -ge 0) {
+        $lines[$setting] = 'check_for_updates_on_startup=0'
+    }
+    elseif ($section -ge 0) {
+        $lines.Insert($sectionEnd, 'check_for_updates_on_startup=0')
+    }
+    else {
+        if ($lines.Count -gt 0 -and $lines[$lines.Count - 1].Trim().Length -gt 0) { $lines.Add('') }
+        $lines.Add('[Everything]')
+        $lines.Add('check_for_updates_on_startup=0')
+    }
+    [System.IO.File]::WriteAllLines($path, $lines, (New-Object System.Text.UTF8Encoding($false)))
+}
+
 function Set-EverythingEnterpriseConfiguration {
     $programFiles = [Environment]::GetFolderPath('ProgramFiles')
     $programFilesX86 = [Environment]::GetFolderPath('ProgramFilesX86')
@@ -795,23 +840,41 @@ function Set-EverythingEnterpriseConfiguration {
         (Join-Path $programFilesX86 'Everything\Everything.exe')
     )
 
-    # Attende la chiusura del client prima di modificare le opzioni: altrimenti
-    # Everything può restituire codice 1 mentre il processo è ancora attivo.
+    # Le opzioni di installazione richiedono la chiusura completa del client.
     & $everything '-exit' '-wait' 2>&1 | ForEach-Object { if ($null -ne $_) { Write-Log ([string]$_) } }
-    $arguments = @(
-        '-disable-update-notification',
+
+    # Opzioni macchina: app_data e run_as_admin risiedono nell'INI accanto
+    # all'eseguibile; non vanno duplicate nei profili utente.
+    Invoke-Native -FilePath $everything -Arguments @(
+        '-app-data',
         '-disable-run-as-admin',
-        '-uninstall-run-on-system-startup',
         '-uninstall-all-users-run-on-system-startup'
-    )
+    ) -SuccessCodes @(0)
     if ($null -eq (Get-Service -Name 'Everything' -ErrorAction SilentlyContinue)) {
-        $arguments = @('-install-service') + $arguments
+        Invoke-Native -FilePath $everything -Arguments @('-install-service') -SuccessCodes @(0)
     }
-    Invoke-Native -FilePath $everything -Arguments $arguments -SuccessCodes @(0)
+
+    # Le opzioni utente vengono eseguite separatamente da quelle amministrative.
+    Invoke-Native -FilePath $everything -Arguments @(
+        '-disable-update-notification',
+        '-uninstall-run-on-system-startup'
+    ) -SuccessCodes @(0)
+
+    $profilePaths = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    $null = $profilePaths.Add([Environment]::GetFolderPath('UserProfile'))
+    $null = $profilePaths.Add((Join-Path $env:SystemDrive 'Users\Default'))
+    foreach ($profile in @(Get-CimInstance Win32_UserProfile | Where-Object { -not $_.Special -and $_.LocalPath })) {
+        $null = $profilePaths.Add($profile.LocalPath)
+    }
+    foreach ($profilePath in $profilePaths) {
+        if (Test-Path -LiteralPath $profilePath -PathType Container) {
+            Set-EverythingUserPreset -ProfilePath $profilePath
+        }
+    }
 
     Set-Service -Name 'Everything' -StartupType Automatic
     Start-ServiceIfNeeded -Name 'Everything'
-    Write-Log 'Everything configurato come servizio, senza avvio automatico della GUI o notifiche aggiornamenti.' -Level OK
+    Write-Log 'Everything: servizio automatico, indicizzazione tramite servizio, GUI non elevata e aggiornamenti disattivati nei profili.' -Level OK
 }
 
 function Copy-UniformUserPresets {

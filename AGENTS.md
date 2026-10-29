@@ -91,7 +91,7 @@ Prima delle installazioni le cache/download vengono reindirizzate in `cache\wing
 - Telnet Client e .NET 3.5 sempre; RSAT soltanto su richiesta tramite parametro.
 - Condivisioni amministrative `C$`/`ADMIN$`, WinRM/WMI, `LocalAccountTokenFilterPolicy=1`; SMB1 non va abilitato.
 - `LanmanServer` va riavviato soltanto quando cambia `AutoShareWks`.
-- Everything deve operare come servizio, senza avvio automatico della GUI o notifiche aggiornamenti.
+- Everything deve operare come servizio, senza avvio automatico della GUI o notifiche aggiornamenti. Forzare `-app-data`: `app_data` e `run_as_admin` restano nell'INI accanto all'eseguibile; `check_for_updates_on_startup=0` va unito senza sovrascrivere l'INI dei profili esistenti e del profilo Default.
 - LiteManager deve usare autenticazione Windows e consentire accesso soltanto agli amministratori.
 
 ## Dipendenze esterne non presenti nella repository
@@ -123,7 +123,7 @@ cache\
 - `Add-WindowsCapability` in Windows PowerShell 5.1 **non accetta `-NoRestart`**: non ripristinarlo.
 - La PATH va scritta aprendo la chiave Registry in scrittura; `Get-Item` seguito da `SetValue` ha causato accesso negato.
 - Le scritture Registry usano `RegistryKey.CreateSubKey(..., $true)` e devono riportare chiave/valore esatti in caso di errore.
-- Everything può restituire codice 1 se configurato mentre il client si sta chiudendo: usare `-exit -wait` prima delle opzioni.
+- Everything può restituire codice 1 se configurato mentre il client si sta chiudendo: usare `-exit -wait` prima delle opzioni e separare le opzioni amministrative da quelle utente. Non inventare `run_on_system_startup` nell'INI: l'avvio automatico va rimosso con le opzioni CLI documentate.
 - PDF-XChange 11 può registrare `PXCEditor.PDF`; non limitare il rilevamento ai soli nomi `PDFX`.
 - Il controllo preventivo del REG LiteManager impediva l'installazione: il pacchetto deve essere installato prima.
 - Per i servizi gestire anche `StartPending` e `StopPending`; non riavviare ripetutamente servizi senza necessità.
