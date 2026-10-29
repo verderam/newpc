@@ -37,6 +37,8 @@ apps\
 settings\softwarepolicy.ini
 settings\LiteManagerServer.reg
 settings\user-presets\
+sw\
+cache\
 ```
 
 - `bin` viene copiato in `C:\bin` e aggiunto alla PATH; `SetUserFTA.exe` applica subito le associazioni all'utente corrente.
@@ -44,6 +46,8 @@ settings\user-presets\
 - `softwarepolicy.ini` viene copiato in `C:\Windows\softwarepolicy`.
 - `LiteManagerServer.reg` contiene la configurazione aziendale di LiteManager Server. Senza questo file il pacchetto viene installato, ma il server resta arrestato e non configurato.
 - `user-presets` replica la struttura dei profili utente e distribuisce le preimpostazioni applicative.
+- Ogni MSI presente in `sw`, anche nelle sottocartelle, viene installato con `/passive /norestart`.
+- Durante le installazioni, WinGet e Chocolatey usano `cache` accanto allo script per riutilizzare i download da USB o rete; al termine vengono ripristinati i valori predefiniti. La cache non viene eliminata.
 
 Al termine viene creato `winget.json` nella cartella corrente e svuotata la cartella `%TEMP%`. I log sono salvati in `C:\ProgramData\NewPC\logs`.
 

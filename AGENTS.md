@@ -57,7 +57,7 @@ Installazione con WinGet e fallback Chocolatey, saltando pacchetti già rilevati
 
 Chocolatey viene installato tramite WinGet se assente. Non trasformare un errore di autenticazione/rete/package manager in un falso “già installato”.
 
-Prima delle installazioni le cache/download vengono reindirizzate in `%ProgramData%\NewPC\cache\winget` e `%ProgramData%\NewPC\cache\choco`. WinGet usa `downloadBehavior.defaultDownloadDirectory` nel proprio `settings.json`; Chocolatey usa `choco config set cacheLocation`. Dopo LiteManager vengono ripristinati i default rimuovendo la proprietà WinGet e con `choco config unset cacheLocation`; il blocco `finally` finale ripete il ripristino se necessario. Non cancellare le altre impostazioni WinGet e non lasciare il reindirizzamento attivo.
+Prima delle installazioni le cache/download vengono reindirizzate in `cache\winget` e `cache\choco` **accanto a `newpc.ps1` (`$PSScriptRoot`)**, per riutilizzare i download da USB o condivisione di rete. Non usare `%ProgramData%` per queste cache. Se la sottocartella non è scrivibile, lasciare attivi i default senza bloccare le installazioni. WinGet usa `downloadBehavior.defaultDownloadDirectory` nel proprio `settings.json`; Chocolatey usa `choco config set cacheLocation`. Dopo LiteManager vengono ripristinati i default rimuovendo la proprietà WinGet e con `choco config unset cacheLocation`; il blocco `finally` finale ripete il ripristino se necessario. Non cancellare le altre impostazioni WinGet e non lasciare il reindirizzamento attivo.
 
 ### Associazioni
 
@@ -105,6 +105,8 @@ apps\
 settings\softwarepolicy.ini
 settings\LiteManagerServer.reg
 settings\user-presets\
+sw\
+cache\
 ```
 
 - `SetUserFTA.exe`: necessario per applicare subito le associazioni all'utente corrente; non inventarne un'implementazione.
@@ -112,6 +114,8 @@ settings\user-presets\
 - `LiteManagerServer.reg`: obbligatorio per la configurazione aziendale, esportato da un Server di riferimento con WinNT security, Administrators Full Control, nessun altro utente, fallback password e consenso utente disabilitati.
 - LiteManager viene comunque **installato prima** del controllo del REG. Se il REG manca, ROMServer resta arrestato e lo script segnala la configurazione mancante. Non inventare valori Registry LiteManager.
 - `apps` e `user-presets` sono opzionali; i preset hanno struttura speculare al profilo, ad esempio `AppData\Roaming\Notepad++\config.xml`.
+- `sw` è opzionale: ogni file `.msi`, anche nelle sottocartelle, viene installato con `msiexec.exe /i <file> /passive /norestart`; codici validi 0, 1641 e 3010. Un MSI fallito non blocca gli altri.
+- `cache` viene creata accanto allo script per conservare e riutilizzare i download tra PC; non va ripulita come `%TEMP%`.
 - `.NET 3.5` può richiedere `-NetFx3Source 'D:\sources\sxs'` in assenza di una sorgente online.
 
 ## Problemi già affrontati: non reintrodurli

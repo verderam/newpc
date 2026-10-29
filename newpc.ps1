@@ -6,7 +6,8 @@
 .DESCRIPTION
     - Abilita Desktop remoto e aggiunge Everyone al gruppo Utenti desktop remoto.
     - Installa Chocolatey con WinGet e le applicazioni richieste con WinGet/Chocolatey.
-    - Usa %ProgramData%\NewPC\cache durante le installazioni e poi ripristina le cache predefinite.
+    - Usa la sottocartella cache accanto allo script e poi ripristina le cache predefinite.
+    - Installa gli eventuali MSI nella sottocartella sw con /passive /norestart.
     - Configura le associazioni predefinite per nuovi utenti tramite DISM e per tutti tramite criterio.
     - Configura subito l'utente corrente tramite SetUserFTA.exe, se presente in bin o C:\bin.
     - Rinomina il computer W-XXXXXX usando gli ultimi 6 caratteri del primo MAC fisico.
@@ -78,7 +79,7 @@ $script:WingetExe = $null
 $script:ChocoExe = $null
 $script:WingetCacheConfigured = $false
 $script:ChocoCacheConfigured = $false
-$CacheDirectory = Join-Path $WorkDirectory 'cache'
+$CacheDirectory = Join-Path $PSScriptRoot 'cache'
 
 function Write-Log {
     param(
@@ -614,7 +615,11 @@ function Save-WingetSettings {
 
 function Set-WingetCacheLocation {
     $cachePath = Join-Path $CacheDirectory 'winget'
-    $null = New-Item -Path $cachePath -ItemType Directory -Force
+    try { $null = New-Item -Path $cachePath -ItemType Directory -Force -ErrorAction Stop }
+    catch {
+        Write-Log "Cache WinGet non scrivibile in $cachePath; resta attivo il default. $($_.Exception.Message)" -Level WARN
+        return
+    }
     $settingsPath = Get-WingetSettingsPath
     $settings = Read-WingetSettings -Path $settingsPath
 
@@ -630,7 +635,11 @@ function Set-WingetCacheLocation {
 function Set-ChocolateyCacheLocation {
     if ($null -eq $script:ChocoExe) { throw 'Chocolatey non disponibile.' }
     $cachePath = Join-Path $CacheDirectory 'choco'
-    $null = New-Item -Path $cachePath -ItemType Directory -Force
+    try { $null = New-Item -Path $cachePath -ItemType Directory -Force -ErrorAction Stop }
+    catch {
+        Write-Log "Cache Chocolatey non scrivibile in $cachePath; resta attivo il default. $($_.Exception.Message)" -Level WARN
+        return
+    }
     Invoke-Native -FilePath $script:ChocoExe -Arguments @(
         'config', 'set', '--name', 'cacheLocation', '--value', $cachePath
     ) -SuccessCodes @(0, 2)
@@ -884,6 +893,34 @@ function Install-RequestedApplications {
         catch {
             $script:Failures += "Installazione $($application.Name)"
             Write-Log "Installazione $($application.Name) non riuscita: $($_.Exception.Message)" -Level ERROR
+        }
+    }
+}
+
+function Install-LocalMsiPackages {
+    $source = Join-Path $PSScriptRoot 'sw'
+    if (-not (Test-Path -LiteralPath $source -PathType Container)) {
+        Write-Log "Cartella MSI opzionale non presente: $source"
+        return
+    }
+
+    $packages = @(Get-ChildItem -LiteralPath $source -Filter '*.msi' -File -Recurse | Sort-Object FullName)
+    if ($packages.Count -eq 0) {
+        Write-Log "Nessun MSI trovato in $source."
+        return
+    }
+
+    foreach ($package in $packages) {
+        try {
+            Write-Log "Installazione MSI: $($package.FullName)"
+            Invoke-Native -FilePath "$env:SystemRoot\System32\msiexec.exe" -Arguments @(
+                '/i', $package.FullName, '/passive', '/norestart'
+            ) -SuccessCodes @(0, 1641, 3010)
+            Write-Log "MSI installato: $($package.Name)" -Level OK
+        }
+        catch {
+            $script:Failures += "MSI $($package.Name)"
+            Write-Log "Installazione MSI $($package.FullName) non riuscita: $($_.Exception.Message)" -Level ERROR
         }
     }
 }
@@ -1861,6 +1898,7 @@ try {
         $script:Failures += 'Installazione applicazioni e associazioni'
         Write-Log 'Chocolatey non disponibile: installazioni e associazioni saltate.' -Level ERROR
     }
+    Invoke-Step 'Installazione MSI dalla cartella sw' { Install-LocalMsiPackages }
 
     Invoke-Step 'Attivazione Telnet, .NET 3.5 ed eventuale RSAT' { Enable-EnterpriseWindowsFeatures }
     Invoke-Step 'Amministrazione remota e condivisioni amministrative' { Enable-EnterpriseRemoteManagement }
